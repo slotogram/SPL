@@ -1,0 +1,25 @@
+EXPORTS
+    spl_filter_binary_file @1
+    spl_filter_binary_file_str @2
+    spl_filter_memory @3
+    spl_filter_memory_linear @4
+    spl_filter_memory_linear_str @5
+    spl_filter_memory_str @6
+    spl_filter_wave_file @7
+    spl_filter_wave_file_str @8
+    spl_load_signal @9
+    spl_load_signal_str @10
+    spl_mask_binary_file @11
+    spl_mask_binary_file_str @12
+    spl_mask_memory @13
+    spl_mask_memory_str @14
+    spl_scale_generate_bark @15
+    spl_scale_generate_bark_str @16
+    spl_scale_generate_linear @17
+    spl_scale_generate_linear_str @18
+    spl_scale_generate_log @19
+    spl_scale_generate_log_str @20
+    spl_scale_generate_mel @21
+    spl_scale_generate_mel_str @22
+    spl_scale_generate_model @23
+    spl_scale_generate_model_str @24
