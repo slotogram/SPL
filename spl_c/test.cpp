@@ -981,18 +981,26 @@ void test_pitch_track() {
 	
 }
 
-void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int ptr, bool norm, ofstream<float>& output2,const scale_class& sc,const spl::spectrum& sp,int k1, int k2)
+void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int ptr, bool norm, ofstream<float>& output2,const scale_class& sc,const spl::spectrum& sp,int k1, int k2, const  mask& msk)
 {
 	
 	
 	int d =harm_num;
 	int dd = harm_num+harm_num;
+	double freq=0;
     spectrum_t* tmp = new spectrum_t[harm_num];
 	double* avg = new double[harm_num];
+	double* last_freq = new double[harm_num];
+	double* intensity = new double[harm_num];
+	bool* used = new bool[harm_num];
 	int* max = new int[harm_num];
+	bool inside_segment = false;
+	spectrum_t max_segment = -std::numeric_limits<double>::max();
+	int num_segment = 0;
+	int ptr2 = ptr;
 	for (int k=0; k<harm_num; k++)
 	{
-		max[k] = -2;
+		max[k] = 0;
 		tmp[k] = -std::numeric_limits<double>::max();
 		avg[k] = 0;
 	}
@@ -1000,17 +1008,37 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 	{
 		for (int j=k1; j<k2; j++)
 		{
-			for (int k=0; k<harm_num; k++)
+			
+			if (msk.Z[ptr*sp.K+j] != 0)
 			{
-				if (tmp[k]<sp.Y[ptr*sp.K+j]) 
+				inside_segment = true;
+				if (max_segment < sp.Y[ptr*sp.K+j])
 				{
-					for (int l=harm_num-1; l>k;l--)
-					{
-						max[l]=max[l-1];
+					max_segment = sp.Y[ptr*sp.K+j];
+					num_segment = j;
+				}
+			}
+			else 
+			{ 
+				if (inside_segment) //закончился наш сегмент не маскируемых частот
+				{
+					inside_segment = false; /* обнуляем максимумы в сегменте */
+					for (int k=0; k<harm_num; k++)
+					{				
+						if (tmp[k]<max_segment)
+						{
+							for (int l=harm_num-1; l>k;l--)
+							{
+								max[l]=max[l-1];
+								tmp[l]=tmp[l-1];
+							}
+							tmp[k] = max_segment;
+							max[k] = num_segment;
+							break;
+						}
 					}
-					tmp[k] = sp.Y[ptr*sp.K+j];
-					max[k] = j;
-					break;
+					max_segment = -std::numeric_limits<double>::max();
+					num_segment = 0;
 				}
 			}
 		}
@@ -1020,42 +1048,129 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 		}
 	}
 	else //вычисляем значения в окне
+		// алгоритм следующий: в первом семпле находим максимумы в не маскируемых сегментах и запоминаем.
+		//в последующих сегментах находим X максимумов и складываем их частоты с ближайшими частотами (из предыдщего сепмла), запоминаем.
+		//при этом суммируем значения интенсивностей, чтобы затем упорядочить все по убыванию.
 	{
 		for (int n=0; n<ws_s; n++)	
 		{
 			for (int k=0; k<harm_num; k++)
 			{
-				max[k] = -2;
+				max[k] = 0;
 				tmp[k] = -std::numeric_limits<double>::max();
+				used[k] = false;
 			}
 			//находим массив максимальных гармоник в данном семпле.
 
 			for (int j=k1; j<k2; j++)
+		{
+			
+			if (msk.Z[ptr2*sp.K+j] != 0)
+			{
+				inside_segment = true;
+				if (max_segment < sp.Y[ptr2*sp.K+j])
 				{
+					max_segment = sp.Y[ptr2*sp.K+j];
+					num_segment = j;
+				}
+			}
+			else 
+			{ 
+				if (inside_segment) //закончился наш сегмент не маскируемых частот
+				{
+					
 					for (int k=0; k<harm_num; k++)
-					{
-						if (tmp[k]<sp.Y[ptr*sp.K+j]) 
+					{				
+						if (tmp[k]<max_segment)
 						{
 							for (int l=harm_num-1; l>k;l--)
 							{
 								max[l]=max[l-1];
+								tmp[l]=tmp[l-1];
 							}
-							tmp[k] = sp.Y[ptr*sp.K+j];
-							max[k] = j;
+							tmp[k] = max_segment;
+							max[k] = num_segment;
 							break;
 						}
 					}
+					inside_segment = false; /* обнуляем максимумы в сегменте */
+					max_segment = -std::numeric_limits<double>::max();
+					num_segment = 0;
 				}
-			//а затем находим средние
-			for (int k=0; k<harm_num; k++)
-			{
-				avg[k]+= sc.Fr[max[k]];
 			}
 		}
+			//добавляем к наиболее близким.
 			for (int k=0; k<harm_num; k++)
 			{
+				freq = sc.Fr[max[k]];
+				//avg[k]+= sc.Fr[max[k]];
+				if (n!=0) //не первый семпл, добавляем к наиболее близким
+				{
+					if (last_freq[k] == 0) {used[k] = true; intensity[k] = 0; avg[k] = 0;}
+					else 
+					{
+						if (max[k] == 0) //надо продумать что тут сделать, когда не находим максимума
+							{ int nu_index=harm_num-1; 
+						for (int m=harm_num-1;m>0;m--) { if (!used[m]) nu_index =m;}
+
+							used [nu_index] = true; intensity[nu_index] = intensity[k]; intensity[k]=0; last_freq[nu_index] = last_freq[k]; last_freq[k] = 0; avg[nu_index] = avg[k]; avg[k] = 0;
+						 }
+					
+						else {
+
+					int close = 0;
+					
+					while (used[close]) close++;
+					
+					for (int l=close+1; l<harm_num;l++) //ищем наиболее близкую частоту, при этом еще не использованную
+					{
+						if ((!used[l])&&abs(last_freq[l]-freq)<abs(last_freq[close]-freq)) close = l; 
+					}
+					
+					avg[close]+= freq;
+					//if ( -std::numeric_limits<double>::infinity() != tmp[k]) 
+					intensity[close] += tmp[k];
+					used[close] = true;
+					last_freq[close] = freq;
+						}}
+				}
+				else //первый семпл, просто запоминаем
+				{
+					if (max[k] == 0) {used [k] = true; intensity[k] = 0; last_freq[k] = 0; avg[k] = 0;} else {
+					avg[k]+= freq;
+					if ( -std::numeric_limits<double>::infinity() == tmp[k]) 
+						intensity[k] = 0; else
+					intensity[k] = tmp[k];
+					last_freq[k] = freq;}
+				}
 				
+			}
+			ptr2++;
+			inside_segment = false; /* обнуляем максимумы в сегменте */
+			max_segment = -std::numeric_limits<double>::max();
+			num_segment = 0;
+		}
+		//а затем находим средние
+			for (int k=0; k<harm_num; k++)
+			{
 				mharm[k] = avg[k]/ws_s;
+			}
+			double swap;
+			double srch_max = -std::numeric_limits<double>::max();
+			int srch_ind = 0;
+			//сортируем по интенсивностям
+			for (int m=0;m<harm_num; m++) {
+				srch_max = -std::numeric_limits<double>::max(); srch_ind = m;
+			for (int k=m; k<harm_num; k++)
+			{
+				if (intensity[k]>srch_max) {srch_max=intensity[k]; srch_ind = k;}
+			}
+			swap = mharm[m]; 
+			mharm[m] = mharm[srch_ind];
+			mharm[srch_ind] = swap;
+			swap = intensity[m]; 
+			intensity[m] = intensity[srch_ind];
+			intensity[srch_ind] = swap;
 			}
 	}
 	//а теперь выводим результат
@@ -1087,6 +1202,9 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 	delete [] avg;
 	delete [] tmp;
 	delete [] max;
+    delete [] last_freq;
+	delete [] intensity;
+	delete [] used;
 }
 void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl::spectrum& sp,const  mask& msk,short* channels,const char *output_path, short low_ch, short ch_num,const  scale_class& sc)
 {
@@ -1100,7 +1218,8 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 	 wm_s = ((wm*sp.F)/1000); //сдвиг в семплах
 	}
 	else { ws_s=1; wm_s=1;}
-
+	
+		
 	int result_n = (msk.N-(ws_s-wm_s))/wm_s; //всего результирующих значений каналов ЧОТ
 
 	//выводим сколько у нас признаков
@@ -1127,7 +1246,7 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 	for (int i=0; i<result_n; i++)
 	{
 		
-	if (harm_num!=0) find_max_harm(mharm,ws_s, feat_num, harm_num,ptr,norm, output2,sc, sp,k1,k2);
+	if (harm_num!=0) find_max_harm(mharm,ws_s, feat_num, harm_num,ptr,norm, output2,sc, sp,k1,k2,msk);
 		if (ws_s == 1) { if (channels[ptr] != -1) current = sc.Fr[channels[ptr]]; else current = -1; }
 		else 
 		{
@@ -1161,9 +1280,9 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 		ddelta = delta;
 		delta = current;
 	}
-	if (ptr<msk.N)
+	if (ptr<msk.N)	
 		{
-			if (harm_num!=0) find_max_harm(mharm,msk.N-ptr, feat_num, harm_num,ptr,norm, output2,sc, sp,k1,k2);
+			if (harm_num!=0) find_max_harm(mharm,msk.N-ptr, feat_num, harm_num,ptr,norm, output2,sc, sp,k1,k2,msk);
 			current = -1;
 			
 			output2.put(current);
@@ -1376,7 +1495,7 @@ struct test {
 
 struct helper{ const char *name; 
 } help_[] = {{"Speech parameters estimation. Command line help:"},
-			{"test.exe .wav_path output_path -ws* -wm* -d* -dd* -n* -seg* "},
+			{"test.exe .wav_path output_path -ws* -wm* -nw** -X* -d* -dd* -n* -seg* "},
 			{"* - not required"},			
 			{"-ws int / window size, default 20 ms"},
 			{"-wm int / window move, default 10 ms"},
