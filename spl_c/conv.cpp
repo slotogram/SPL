@@ -9,7 +9,7 @@
 #include "conv.h"
 using spl::SPL_MEMORY_ALIGN;
 
-#include <fftw3.h>
+#include "fftw3.h"
 #define _USE_MATH_DEFINES // M_PI, etc
 #include <math.h>
 #include <stdio.h>

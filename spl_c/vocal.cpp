@@ -14,7 +14,7 @@
 #define _TEMPLATE_SEARCH_FAST_
 
 //#define __MPN(x) ___gmpn_##x
-#include <mpir.h>
+#include "mpir.h"
 #include <algorithm>
 #include <queue>
 using std::fill_n;
