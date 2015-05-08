@@ -983,17 +983,20 @@ void test_pitch_track() {
 
 void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int ptr, bool norm, ofstream<float>& output2,const scale_class& sc,const spl::spectrum& sp,int k1, int k2, const  mask& msk)
 {
-	
-	
 	int d =harm_num;
 	int dd = harm_num+harm_num;
+	if (harm_num>20) harm_num +=5; else harm_num+=10;
+
+
 	double freq=0;
     spectrum_t* tmp = new spectrum_t[harm_num];
 	double* avg = new double[harm_num];
 	double* last_freq = new double[harm_num];
 	double* intensity = new double[harm_num];
 	bool* used = new bool[harm_num];
-	int* max = new int[harm_num];
+	int* max = new int[harm_num]; // массив номеров каналов с макс по интенсивности гармониками
+	int* count = new int[harm_num]; // массив количества использованных семпплов в формантах.
+
 	bool inside_segment = false;
 	spectrum_t max_segment = -std::numeric_limits<double>::max();
 	int num_segment = 0;
@@ -1003,6 +1006,9 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 		max[k] = 0;
 		tmp[k] = -std::numeric_limits<double>::max();
 		avg[k] = 0;
+		count[k] = 0;
+		intensity[k] =0;
+		last_freq[k] =0;
 	}
 	if (ws_s == 1) //не усредняем
 	{
@@ -1054,13 +1060,14 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 	{
 		for (int n=0; n<ws_s; n++)	
 		{
-			for (int k=0; k<harm_num; k++)
+			for (int k=0; k<harm_num; k++) //обнуляем массивы
 			{
 				max[k] = 0;
 				tmp[k] = -std::numeric_limits<double>::max();
 				used[k] = false;
 			}
-			//находим массив максимальных гармоник в данном семпле.
+
+			//1. находим массив максимальных гармоник в данном семпле.
 
 			for (int j=k1; j<k2; j++)
 		{
@@ -1099,45 +1106,45 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 				}
 			}
 		}
-			//добавляем к наиболее близким.
+			//2. добавляем к наиболее близким.
 			for (int k=0; k<harm_num; k++)
 			{
 				freq = sc.Fr[max[k]];
 				//avg[k]+= sc.Fr[max[k]];
 				if (n!=0) //не первый семпл, добавляем к наиболее близким
 				{
-					if (last_freq[k] == 0) {used[k] = true; intensity[k] = 0; avg[k] = 0;}
-					else 
+					if (max[k] != 0) //если не нашли максимума, то ничего не делаем
 					{
-						if (max[k] == 0) //надо продумать что тут сделать, когда не находим максимума
-							{ int nu_index=harm_num-1; 
-						for (int m=harm_num-1;m>0;m--) { if (!used[m]) nu_index =m;}
+						int close = 0;
+					
+						while (used[close]) close++; //ищем первую неиспользованную гармонику
+					
+						for (int l=close+1; l<harm_num;l++) //ищем наиболее близкую частоту, при этом еще не использованную
+						{
+							if ((!used[l])&&abs(last_freq[l]-freq)<abs(last_freq[close]-freq)) close = l; 
+						}
+						if ((last_freq[close]!=0)&&(abs(last_freq[close]-freq) > 50)) //если большая разница с ближайшим, то пытаемся найти свободное место
+						{
+							int l;
+							for (l=0; l<harm_num;l++)
+							{
+								if (last_freq[l] == 0) break;
+							}
+							if (l!=harm_num) {close = l; }
 
-							used [nu_index] = true; intensity[nu_index] = intensity[k]; intensity[k]=0; last_freq[nu_index] = last_freq[k]; last_freq[k] = 0; avg[nu_index] = avg[k]; avg[k] = 0;
-						 }
-					
-						else {
-
-					int close = 0;
-					
-					while (used[close]) close++;
-					
-					for (int l=close+1; l<harm_num;l++) //ищем наиболее близкую частоту, при этом еще не использованную
-					{
-						if ((!used[l])&&abs(last_freq[l]-freq)<abs(last_freq[close]-freq)) close = l; 
+						}
+						avg[close]+= freq;
+						count[close]++;
+						//if ( -std::numeric_limits<double>::infinity() != tmp[k]) 
+						intensity[close] += tmp[k];
+						used[close] = true;
+						last_freq[close] = freq;
 					}
-					
-					avg[close]+= freq;
-					//if ( -std::numeric_limits<double>::infinity() != tmp[k]) 
-					intensity[close] += tmp[k];
-					used[close] = true;
-					last_freq[close] = freq;
-						}}
 				}
 				else //первый семпл, просто запоминаем
 				{
-					if (max[k] == 0) {used [k] = true; intensity[k] = 0; last_freq[k] = 0; avg[k] = 0;} else {
-					avg[k]+= freq;
+					if (max[k] == 0) { intensity[k] = 0; last_freq[k] = 0; avg[k] = 0;} else {
+					avg[k]+= freq; count[k]++;
 					if ( -std::numeric_limits<double>::infinity() == tmp[k]) 
 						intensity[k] = 0; else
 					intensity[k] = tmp[k];
@@ -1153,29 +1160,44 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 		//а затем находим средние
 			for (int k=0; k<harm_num; k++)
 			{
-				mharm[k] = avg[k]/ws_s;
+				if (count[k] != 0 ) avg[k] = avg[k]/count[k];
+				else avg[k] = 0;
 			}
 			double swap;
 			double srch_max = -std::numeric_limits<double>::max();
-			int srch_ind = 0;
+			int srch_ind = 0; int srch_len = 0;
 			//сортируем по интенсивностям
 			for (int m=0;m<harm_num; m++) {
 				srch_max = -std::numeric_limits<double>::max(); srch_ind = m;
+			
+			/*for (int k=m; k<harm_num; k++)//ищем максимальную длину
+			{
+				if (count[k] > srch_len) {srch_len = count[k];}
+			}
+			for (int k=m; k<harm_num; k++)
+			{
+				if ((count[k]==srch_len)&&(intensity[k]>srch_max)) {srch_max=intensity[k]; srch_ind = k;}
+			}*/
 			for (int k=m; k<harm_num; k++)
 			{
 				if (intensity[k]>srch_max) {srch_max=intensity[k]; srch_ind = k;}
 			}
-			swap = mharm[m]; 
-			mharm[m] = mharm[srch_ind];
-			mharm[srch_ind] = swap;
+			swap = avg[m]; 
+			avg[m] = avg[srch_ind];
+			avg[srch_ind] = swap;
 			swap = intensity[m]; 
 			intensity[m] = intensity[srch_ind];
 			intensity[srch_ind] = swap;
 			}
+			harm_num = d; //меняем количество гармоник на изначальное
+			for (int k=0; k<harm_num; k++)
+			{
+				mharm[k] = avg[k];
+			}
 	}
 	//а теперь выводим результат
 
-	if (norm) 
+		if (norm) 
 	{  
 		for (int k=0; k<harm_num; k++)
 			{
@@ -1184,7 +1206,7 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 	}
 	
 	//выводим
-	for (int k=0; k<harm_num; k++)
+  	for (int k=0; k<harm_num; k++)
 	{
 		output2.put((float)mharm[k]);
 		if (feat_num > 1) output2.put((float)(mharm[k]-mharm[k+d]));
@@ -1205,6 +1227,7 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
     delete [] last_freq;
 	delete [] intensity;
 	delete [] used;
+	delete [] count;
 }
 void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl::spectrum& sp,const  mask& msk,short* channels,const char *output_path, short low_ch, short ch_num,const  scale_class& sc)
 {
@@ -1223,7 +1246,7 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 	int result_n = (msk.N-(ws_s-wm_s))/wm_s; //всего результирующих значений каналов ЧОТ
 
 	//выводим сколько у нас признаков
-	output2.put(feat_num+harm_num);
+	output2.put(feat_num+(harm_num*feat_num));
 	//выводим количество блоков на один признак
 	if (result_n*wm_s<msk.N) output2.put(result_n+1);
 	else output2.put(result_n);
