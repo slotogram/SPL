@@ -1289,7 +1289,7 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 
 		if (norm&&current!=-1) 
 		{
-			current = (current/original.Fov)-0.5;
+			current = (current/200)-0.5;
 		}
 
 		//вывод
@@ -1383,7 +1383,7 @@ void get_mtf(int ws, int wm, short feat_num, int harm_num, bool norm,const char*
 
 	
 	//делим на окна и выводим
-	windowing(ws,wm,feat_num , harm_num, norm, sp, msk, channels, ch_path, k1, nk, sc);
+	if (voc_path == nullptr) windowing(ws,wm,feat_num , harm_num, norm, sp, msk, channels, ch_path, k1, nk, sc);
 	
 		
 	//printf("%i",total_v);
@@ -1527,7 +1527,7 @@ struct helper{ const char *name;
 			{"-d / include deltas"},
 			{"-dd / include deltas and double deltas"},
 			{"-n / normalize"},
-			{"-seg seg_path / do speech algo voiced-unvoiced segmentation"},
+			{"-seg  / do speech algo voiced-unvoiced segmentation"},
 			{""},
 
 
@@ -1572,7 +1572,7 @@ int main(int argc, const char *argv[]) {
 			if(0 == strcmp(argv[i],"-ws")) { ws=atoi(argv[i+1]); i++; continue;}
 			if(0 == strcmp(argv[i],"-wm")) { wm=atoi(argv[i+1]); i++; continue;}
 			if(0 == strcmp(argv[i],"-n")) {norm = true; continue;}
-			if(0 == strcmp(argv[i],"-seg")) {seg_out = argv[i+1]; i++; continue;}
+			if(0 == strcmp(argv[i],"-seg")) {seg_out = argv[2]; continue;}
 			if(0 == strcmp(argv[i],"-d")) {feat_num = 2; continue;}
 			if(0 == strcmp(argv[i],"-dd")) {feat_num = 3; continue;}
 			if(0 == strcmp(argv[i],"-nw")) {ws = 0; continue;}
