@@ -1004,6 +1004,7 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 	for (int k=0; k<harm_num; k++)
 	{
 		max[k] = 0;
+		
 		tmp[k] = -std::numeric_limits<double>::max();
 		avg[k] = 0;
 		count[k] = 0;
@@ -1048,10 +1049,15 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 				}
 			}
 		}
+		delete [] tmp;
+		delete [] count;
+		harm_num = d; //меняем количество гармоник на изначальное
 		for (int k=0; k<harm_num; k++)
 		{			
 			mharm[k] = sc.Fr[max[k]];
 		}
+		delete [] max;
+		delete [] intensity;
 	}
 	else //вычисляем значения в окне
 		// алгоритм следующий: в первом семпле находим максимумы в не маскируемых сегментах и запоминаем.
@@ -1194,6 +1200,10 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 			{
 				mharm[k] = avg[k];
 			}
+			delete [] tmp;
+			delete [] count;
+			delete [] max;
+			delete [] intensity;
 	}
 	//а теперь выводим результат
 
@@ -1222,12 +1232,12 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 	}
 
 	delete [] avg;
-	delete [] tmp;
-	delete [] max;
+	//delete [] tmp;
+	
     delete [] last_freq;
-	delete [] intensity;
+	
 	delete [] used;
-	delete [] count;
+	
 }
 void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl::spectrum& sp,const  mask& msk,short* channels,const char *output_path, short low_ch, short ch_num,const  scale_class& sc)
 {
@@ -1596,4 +1606,5 @@ int main(int argc, const char *argv[]) {
     get_mtf(ws,wm,feat_num, harm_num,norm,argv[1], argv[2],seg_out);
 	return 0;
 }
+
 
