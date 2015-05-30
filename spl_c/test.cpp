@@ -1266,7 +1266,7 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 
 	int ptr = 0;
 	int total_v =0, total_nv =0;
-	float current=0, delta = -0.5, ddelta = -0.5;
+	float current=0, delta = -1, ddelta = -1;
 	double* mharm = new double[harm_num*3];
 	for (int j=0; j<harm_num*3; j++)
 	{
@@ -1279,7 +1279,7 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 	for (int i=0; i<result_n; i++)
 	{
 		
-	if (harm_num!=0) find_max_harm(mharm,ws_s, feat_num, harm_num,ptr,norm, output2,sc, sp,k1,k2,msk);
+	if (harm_num!=0) if (((ws_s==1)&&(channels[ptr] !=-1))||(ws_s!=1))   find_max_harm(mharm,ws_s, feat_num, harm_num,ptr,norm, output2,sc, sp,k1,k2,msk);
 		if (ws_s == 1) { if (channels[ptr] != -1) current = sc.Fr[channels[ptr]]; else current = -1; }
 		else 
 		{
@@ -1297,21 +1297,26 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 			else current = (avg_channel/(ws_s-not_voiced));
 		}
 
+
 		if (norm&&current!=-1) 
 		{
 			current = (current/200)-0.5;
 		}
-
-		//вывод
-		output2.put(current);
-		if (feat_num>1) //выводим 1 дельту
-		{output2.put(current-delta);}
-		if (feat_num>2) //выводим 2 дельту
-		{output2.put(current-ddelta);}
-
-		ptr+=wm_s;
+		if ((ws_s==1)&&(current !=-1))
+		{
+			//вывод
+			output2.put(current);
+			if (feat_num>1) //выводим 1 дельту
+			{output2.put(current-delta);}
+			if (feat_num>2) //выводим 2 дельту
+			{output2.put(current-ddelta);}
+		}
+		
 		ddelta = delta;
 		delta = current;
+		
+		ptr+=wm_s;
+		
 	}
 	if (ptr<msk.N)	
 		{
