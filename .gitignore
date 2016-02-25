@@ -233,3 +233,6 @@ FakesAssemblies/
 *.plg
 
 # Visual Studio 6 workspace options file
+spl_c/obj_debug/CL.write.1.tlog
+spl_c/obj_debug/spl.write.1.tlog
+spl_c/obj_debug/link.write.1.tlog

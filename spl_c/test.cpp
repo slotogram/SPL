@@ -1239,7 +1239,57 @@ void find_max_harm(double* mharm, int ws_s, short feat_num, int harm_num, int pt
 	delete [] used;
 	
 }
-void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl::spectrum& sp,const  mask& msk,short* channels,const char *output_path, short low_ch, short ch_num,const  scale_class& sc)
+
+
+void out_channels(double* avg,short feat_num,int ws_s, int ptr, bool norm, ofstream<float>& output2,const scale_class& sc,const spl::spectrum& sp,int k1, int k2, const  mask& msk)
+{
+	int d = msk.K;
+	int dd = msk.K+msk.K;
+	int totalK = feat_num*msk.K;
+	
+	int ptr2 = ptr*msk.K;
+
+	int totalN = ptr+ws_s;
+	if (totalN>msk.N) { totalN = msk.N-ptr;}
+	for (int j = ptr; j<totalN; j++)
+	{
+		for (int i =0; i<msk.K; i++)
+		{
+			avg[i] += sp.Y[ptr2]*msk.Z[ptr2];
+			ptr2++;
+		}
+	}
+	for (int i=0; i<msk.K; i++)
+	{
+		avg[i]=avg[i]/totalN;
+	}
+
+	//возможно тут нормализация?
+
+	//выводим результат
+
+	for (int i=0; i<msk.K; i++)
+	{
+		output2.put(avg[i]);
+	}
+	if (totalK>msk.K) // если есть дельты
+	{
+		for (int i=msk.K; i<totalK; i++)
+	{
+		output2.put(avg[i-msk.K]-avg[i]);
+	}
+	
+	}
+
+	//запоминаем дельты
+	for (int j = 0; j<msk.K; j++)
+	{
+		avg[j+dd] = avg[j+d];
+		avg[j+d] = avg[j];
+	}
+	
+}
+void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl::spectrum& sp,const  mask& msk,short* channels,const char *output_path, short low_ch, short ch_num,const  scale_class& sc, bool outChannels)
 {
 	// выходной файл
 	ofstream<float> output2(output_path);
@@ -1256,7 +1306,9 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 	int result_n = (msk.N-(ws_s-wm_s))/wm_s; //всего результирующих значений каналов ЧОТ
 
 	//выводим сколько у нас признаков
-	output2.put(feat_num+(harm_num*feat_num));
+	int feats =feat_num+(harm_num*feat_num);
+	if (outChannels) feats += msk.K*feat_num;
+	output2.put(feats);
 	//выводим количество блоков на один признак
 	if (result_n*wm_s<msk.N) output2.put(result_n+1);
 	else output2.put(result_n);
@@ -1272,6 +1324,11 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 	{
 		if (norm) mharm[j] = -0.5; 
 		else mharm[j] = 0;
+	}
+	double* K = new double[msk.K*3];
+	for (int j=0; j<msk.K*3; j++)
+	{
+		K[j]=0;
 	}
 	int k1 = scale_find_freq(sc, original.Fov);
 	int k2 = scale_find_freq(sc,original.Fv);
@@ -1302,9 +1359,16 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 		{
 			current = (current/200)-0.5;
 		}
-		if ((ws_s==1)&&(current !=-1))
+
+		//очень странное условие. Вообще не понимаю, почему так?
+		//if ((ws_s==1)&&(current !=-1))
+		//вообще вопрос, надо ли выводить по разному, когда ЧОТ =0 и когда != 0.Корректно ли выводить 200-0 Гц дельты?
+		
+		
+		//вывод
+		//if (current !=-1)
 		{
-			//вывод
+			
 			output2.put(current);
 			if (feat_num>1) //выводим 1 дельту
 			{output2.put(current-delta);}
@@ -1314,7 +1378,8 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 		
 		ddelta = delta;
 		delta = current;
-		
+
+		if (outChannels) out_channels(K,feat_num, ws_s, ptr,norm, output2,sc, sp,k1,k2,msk);
 		ptr+=wm_s;
 		
 	}
@@ -1328,14 +1393,16 @@ void windowing(int ws, int wm, short feat_num, int harm_num, bool norm,const spl
 			{output2.put(current-delta);}
 			if (feat_num>2) //выводим 2 дельту
 			{output2.put(current-ddelta);}
+			if (outChannels) out_channels(K,feat_num, ws_s, ptr,norm, output2,sc, sp,k1,k2,msk);
 		}
 
 	
 	delete [] mharm;
-
+	delete [] K;
+	output2.close();
 }
 
-void get_mtf(int ws, int wm, short feat_num, int harm_num, bool norm,const char* wav_path, const char* ch_path,const char* voc_path)
+void get_mtf(int ws, int wm, short feat_num, int harm_num, bool norm,const char* wav_path, const char* ch_path,const char* voc_path,bool chan_out)
 {
 	{
 	// открываем шкалу частот
@@ -1398,7 +1465,7 @@ void get_mtf(int ws, int wm, short feat_num, int harm_num, bool norm,const char*
 
 	
 	//делим на окна и выводим
-	if (voc_path == nullptr) windowing(ws,wm,feat_num , harm_num, norm, sp, msk, channels, ch_path, k1, nk, sc);
+	if (voc_path == nullptr) windowing(ws,wm,feat_num , harm_num, norm, sp, msk, channels, ch_path, k1, nk, sc,chan_out);
 	
 		
 	//printf("%i",total_v);
@@ -1427,7 +1494,7 @@ void get_mtf(int ws, int wm, short feat_num, int harm_num, bool norm,const char*
 
 
 	//делим на окна и выводим.
-	windowing(ws,wm,feat_num ,harm_num, norm, sp, msk, segmentation, voc_path,k1,nk,sc);
+	windowing(ws,wm,feat_num ,harm_num, norm, sp, msk, segmentation, voc_path,k1,nk,sc,chan_out);
 
 	//очищаем память
 	delete [] segmentation;}	
@@ -1539,6 +1606,7 @@ struct helper{ const char *name;
 			{"-wm int / window move, default 10 ms"},
 			{"-nw int / do not use windows, samples only"},
 			{"-X int / Output most intensive harmonics, not Fundamental frequency"},
+			{"-K / Output channels"},
 			{"-d / include deltas"},
 			{"-dd / include deltas and double deltas"},
 			{"-n / normalize"},
@@ -1566,6 +1634,9 @@ void test_all() {
 
 } // namespace {
 
+
+// дебаг строки signal.wav signal.bin -ws 20 -wm 10 -X 10 -dd -n -nw -seg signal.bin
+//"E:\temp\123\1 (2).wav" "E:\temp\123\mft2dN\1 (2).mft" -dd -n
 int main(int argc, const char *argv[]) {
 	
 	read_original(original_std, &original);
@@ -1578,6 +1649,7 @@ int main(int argc, const char *argv[]) {
 	bool norm = false;
 	const char * seg_out = nullptr;
 	int harm_num = 0;
+	bool channels = false; // для вывода К каналов
 
 	if (argc <3) { help(); return 0;}
 
@@ -1592,6 +1664,7 @@ int main(int argc, const char *argv[]) {
 			if(0 == strcmp(argv[i],"-dd")) {feat_num = 3; continue;}
 			if(0 == strcmp(argv[i],"-nw")) {ws = 0; continue;}
 			if(0 == strcmp(argv[i],"-X")) {harm_num=atoi(argv[i+1]); i++; continue;}
+			if(0 == strcmp(argv[i],"-K")) {channels=true; continue;}
 
 
 
@@ -1608,7 +1681,7 @@ int main(int argc, const char *argv[]) {
 		
 		
 	}
-    get_mtf(ws,wm,feat_num, harm_num,norm,argv[1], argv[2],seg_out);
+    get_mtf(ws,wm,feat_num, harm_num,norm,argv[1], argv[2],seg_out,channels);
 	return 0;
 }
 
